@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบบันทึกงานมิเตอร์ PEA</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="dot"></span> ระบบบันทึกงานมิเตอร์ PEA</div>
+  <nav class="tabs">
+    <button id="tab-home" class="active">หน้าแรก</button>
+    <button id="tab-history">ประวัติ</button>
+    <button id="tab-dashboard">Dashboard</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- หน้าแรก: เลือกหน่วยงาน -->
+  <section id="screen-home" class="screen active">
+    <h1 class="page-title">เลือกหน่วยงาน</h1>
+    <div id="unit-grid" class="unit-grid"></div>
+  </section>
+
+  <!-- เลือกประเภทงาน -->
+  <section id="screen-menu" class="screen">
+    <div class="crumb"><button id="back-to-units">‹ หน่วยงาน</button></div>
+    <h1 class="page-title" id="menu-unit-name"></h1>
+    <div class="menu-grid">
+      <button class="menu-card" data-type="cut_reconnect">
+        <span class="icon">🔌</span> ตัด-ต่อ
+        <span class="sub">บันทึกงานตัด/ต่อมิเตอร์</span>
+      </button>
+      <button class="menu-card" data-type="remove">
+        <span class="icon">📦</span> ถอนมิเตอร์
+        <span class="sub">บันทึกการถอนมิเตอร์</span>
+      </button>
+      <button class="menu-card" data-type="over90">
+        <span class="icon">⏱️</span> เกิน 90 วัน
+        <span class="sub">รายชื่อผู้ใช้ไฟที่ถูกงดจ่ายเกิน 90 วัน</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ฟอร์มบันทึกงาน -->
+  <section id="screen-form" class="screen">
+    <div class="crumb"><button id="back-to-menu">‹ ประเภทงาน</button></div>
+    <h1 class="page-title"><span id="form-unit-name"></span> · <span id="form-work-label"></span></h1>
+
+    <form id="work-form" class="work-form">
+      <div class="field-row">
+        <div class="field">
+          <label for="f-pea-old">หมายเลข PEA เดิม</label>
+          <input id="f-pea-old" list="pea-options" placeholder="เลือกจากรายการหรือกรอกเอง" autocomplete="off">
+          <datalist id="pea-options"></datalist>
+        </div>
+        <div class="field" id="field-meter-old">
+          <label for="f-meter-old">หน่วยเดิม</label>
+          <input id="f-meter-old" placeholder="หน่วยเดิม">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field" id="field-meter-new">
+          <label for="f-meter-new">หมายเลขมิเตอร์ใหม่</label>
+          <input id="f-meter-new" placeholder="หมายเลขมิเตอร์ใหม่">
+        </div>
+        <div class="field" id="field-pea-new">
+          <label for="f-pea-new">หน่วยใหม่</label>
+          <input id="f-pea-new" placeholder="กรณีเปลี่ยน/ต่อมิเตอร์ใหม่">
+        </div>
+      </div>
+
+      <div class="field" id="field-meter-unit">
+        <label for="f-meter-unit">หน่วยมิเตอร์</label>
+        <input id="f-meter-unit" placeholder="หน่วยมิเตอร์ (ตัวเลขหน่วยล่าสุดที่อ่านได้)">
+      </div>
+
+      <div class="field">
+        <label for="f-customer">ชื่อ-สกุลผู้ใช้ไฟฟ้า</label>
+        <input id="f-customer" placeholder="ชื่อ-สกุล">
+      </div>
+
+      <div class="field">
+        <label for="f-address">สถานที่ใช้ไฟฟ้า</label>
+        <textarea id="f-address" rows="2" placeholder="ที่อยู่"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="f-coords">พิกัด (lat,lng)</label>
+        <div class="coord-row">
+          <input id="f-coords" placeholder="กดปุ่มเพื่อดึงพิกัด หรือกรอกเอง">
+          <button type="button" id="pick-coords-btn" class="btn-icon">📍 ดึงพิกัด</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>ภาพถ่ายหน้างาน (เลือกได้หลายรูป)</label>
+        <label class="photo-area">
+          แตะเพื่อเลือกรูปภาพ — ระบบจะบีบอัดให้ไม่เกิน 1MB อัตโนมัติ
+          <input type="file" id="photo-input" accept="image/*" multiple capture="environment" style="display:none">
+        </label>
+        <div id="photo-preview" class="photo-preview"></div>
+      </div>
+
+      <div class="field">
+        <label for="f-note">หมายเหตุ</label>
+        <textarea id="f-note" rows="2" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"></textarea>
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn-primary">บันทึกข้อมูล</button>
+      <div id="form-status" class="status-msg"></div>
+    </form>
+  </section>
+
+  <!-- ประวัติ -->
+  <section id="screen-history" class="screen">
+    <h1 class="page-title">ประวัติการบันทึก</h1>
+    <p style="color:var(--text-soft); font-size:0.85rem;">แตะรายการเพื่อแก้ไข</p>
+    <div id="history-list" class="history-list"></div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="screen-dashboard" class="screen">
+    <h1 class="page-title">สรุปภาพรวม</h1>
+    <div id="dash-grid" class="dash-grid"></div>
+  </section>
+
+  <p id="last-updated" class="last-updated"></p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
