@@ -259,3 +259,31 @@ datalist { display: none; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Leaflet map overrides */
+.leaflet-container {
+  font-family: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+.leaflet-popup-content { margin: 10px 14px; line-height: 1.6; }
+
+.map-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  margin-bottom: 8px;
+}
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.map-legend .dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  display: inline-block; flex-shrink: 0;
+}

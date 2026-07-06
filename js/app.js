@@ -1,14 +1,15 @@
 // ===== ตัวแปรสถานะ =====
 const state = {
   unit: null,
-  workType: null,   // cut_reconnect | remove | over90
+  workType: null,   // cut | reconnect | remove | over90
   editingId: null,
   photos: [],        // [{dataUrl, blob}]
   history: [],
 };
 
 const WORK_TYPE_LABEL = {
-  cut_reconnect: "ตัด-ต่อ",
+  cut: "ตัด",
+  reconnect: "ต่อ",
   remove: "ถอนมิเตอร์",
   over90: "เกิน 90 วัน",
 };
@@ -100,7 +101,7 @@ function showForm() {
   fillPeaDatalist();
 
   // ซ่อน/แสดงฟิลด์ตามประเภทงาน
-  const showNewFields = state.workType === "cut_reconnect";
+  const showNewFields = state.workType === "reconnect";
   const isOver90 = state.workType === "over90";
   document.getElementById("field-pea-new").style.display = showNewFields ? "" : "none";
   document.getElementById("field-meter-new").style.display = showNewFields ? "" : "none";
@@ -340,13 +341,13 @@ async function loadDashboard() {
     el.innerHTML = `<p style="color:var(--text-soft)">ยังไม่ได้ตั้งค่า Supabase ใน js/config.js</p>`;
     return;
   }
-  const { data, error } = await client.from("submissions").select("work_type, unit");
+  const { data, error } = await client.from("submissions").select("work_type, unit, coordinates, pea_old, customer_name, address");
   if (error) {
     el.innerHTML = `<p style="color:var(--red)">โหลดข้อมูลไม่สำเร็จ: ${error.message}</p>`;
     return;
   }
   const total = data.length;
-  const byType = { cut_reconnect: 0, remove: 0, over90: 0 };
+  const byType = { cut: 0, reconnect: 0, remove: 0, over90: 0 };
   const byUnit = {};
   data.forEach(d => {
     byType[d.work_type] = (byType[d.work_type] || 0) + 1;
@@ -356,11 +357,13 @@ async function loadDashboard() {
 
   el.innerHTML = `
     <div class="dash-stat"><div class="num">${total}</div><div class="label">บันทึกทั้งหมด</div></div>
-    <div class="dash-stat"><div class="num">${byType.cut_reconnect}</div><div class="label">ตัด-ต่อ</div></div>
+    <div class="dash-stat"><div class="num">${byType.cut}</div><div class="label">ตัด</div></div>
+    <div class="dash-stat"><div class="num">${byType.reconnect}</div><div class="label">ต่อ</div></div>
     <div class="dash-stat"><div class="num">${byType.remove}</div><div class="label">ถอนมิเตอร์</div></div>
     <div class="dash-stat"><div class="num">${byType.over90}</div><div class="label">เกิน 90 วัน</div></div>
     <div class="dash-stat"><div class="num">${topUnit ? topUnit[1] : 0}</div><div class="label">หน่วยงานสูงสุด${topUnit ? " (" + topUnit[0] + ")" : ""}</div></div>
   `;
+  plotMapMarkers(data);
 }
 
 // ===== เริ่มต้น =====
@@ -370,7 +373,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("tab-home").onclick = () => showScreen("screen-home");
   document.getElementById("tab-history").onclick = () => { showScreen("screen-history"); loadHistory(); };
-  document.getElementById("tab-dashboard").onclick = () => { showScreen("screen-dashboard"); loadDashboard(); };
+  document.getElementById("tab-dashboard").onclick = () => {
+    showScreen("screen-dashboard");
+    // Safari fix: initMap ต้องเรียกหลัง screen แสดงแล้วเท่านั้น
+    // ใช้ setTimeout 0 เพื่อให้ browser paint layout ก่อน
+    setTimeout(() => { initMap(); loadDashboard(); }, 0);
+  };
 
   document.querySelectorAll(".menu-card").forEach(card => {
     card.onclick = () => selectWorkType(card.dataset.type);
@@ -384,3 +392,101 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
   document.getElementById("work-form").addEventListener("submit", submitForm);
 });
+
+// ===== แผนที่ Dashboard (Leaflet + OpenStreetMap) =====
+// Safari fix: map instance ต้องสร้างหลัง element มองเห็น (display != none)
+// และใช้ setTimeout ให้ browser วาด layout ก่อนเสมอ
+let dashMap = null;
+let dashMarkerGroup = null;
+
+const MARKER_COLOR = {
+  cut: '#c0392b',
+  reconnect: '#2f9e57',
+  remove: '#5b2c83',
+  over90: '#e0922f',
+};
+
+function initMap() {
+  // Safari: ถ้า map container ยังมี height=0 (ถูกซ่อนอยู่) Leaflet จะ render ผิด
+  // ใช้ invalidateSize() หลัง screen แสดงเพื่อแก้ปัญหานี้
+  if (dashMap) return; // สร้างแค่ครั้งเดียว
+
+  // ตรวจว่า Leaflet โหลดสำเร็จ (ป้องกัน Safari CSP block)
+  if (typeof L === 'undefined') {
+    document.getElementById('dash-map').innerHTML =
+      '<p style="padding:20px;color:var(--text-soft)">โหลดแผนที่ไม่สำเร็จ — ตรวจสอบการเชื่อมต่ออินเตอร์เน็ต</p>';
+    return;
+  }
+
+  // จุดเริ่มต้น: ศูนย์กลางประเทศไทย
+  dashMap = L.map('dash-map', {
+    center: [16.0, 102.5],
+    zoom: 6,
+    // Safari fix: ปิด preferCanvas ไว้ — SVG renderer เสถียรกว่าใน Safari
+    preferCanvas: false,
+  });
+
+  // OpenStreetMap tiles — HTTPS เสมอ ไม่มีปัญหา mixed content ใน Safari
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+    // Safari fix: crossOrigin ต้องระบุไว้ไม่งั้น canvas taint error
+    crossOrigin: true,
+  }).addTo(dashMap);
+
+  dashMarkerGroup = L.layerGroup().addTo(dashMap);
+}
+
+function plotMapMarkers(data) {
+  if (!dashMap || !dashMarkerGroup) return;
+  dashMarkerGroup.clearLayers();
+
+  const bounds = [];
+
+  data.forEach(item => {
+    if (!item.coordinates) return;
+    const parts = item.coordinates.split(',');
+    if (parts.length < 2) return;
+    const lat = parseFloat(parts[0].trim());
+    const lng = parseFloat(parts[1].trim());
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const color = MARKER_COLOR[item.work_type] || '#5b2c83';
+
+    // สร้าง marker แบบ SVG circle — ไม่พึ่ง default icon image ที่อาจโหลดไม่ได้ใน Safari
+    const icon = L.divIcon({
+      className: '',
+      html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20S24 21 24 12C24 5.37 18.63 0 12 0z" fill="${color}" opacity="0.9"/>
+        <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+      </svg>`,
+      iconSize: [24, 32],
+      iconAnchor: [12, 32],
+      popupAnchor: [0, -32],
+    });
+
+    const label = WORK_TYPE_LABEL[item.work_type] || item.work_type;
+    const popup = `
+      <b>${item.pea_old || '-'}</b><br>
+      ${item.customer_name || ''}<br>
+      <span style="font-size:0.8em;color:#666">${item.unit} · ${label}</span><br>
+      ${item.address ? `<span style="font-size:0.78em">${item.address}</span>` : ''}
+    `;
+
+    L.marker([lat, lng], { icon })
+      .bindPopup(popup)
+      .addTo(dashMarkerGroup);
+
+    bounds.push([lat, lng]);
+  });
+
+  // Safari fix: ใช้ setTimeout เล็กน้อยก่อน fitBounds
+  // เพื่อให้ layout ของ map container settle ก่อน
+  if (bounds.length > 0) {
+    setTimeout(() => {
+      dashMap.invalidateSize(); // Safari fix: รีเช็คขนาด container
+      dashMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+    }, 150);
+  }
+}
+
